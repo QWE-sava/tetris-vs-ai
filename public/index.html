@@ -46,12 +46,7 @@
   html { overscroll-behavior:none; }
   body { overscroll-behavior:none; -webkit-text-size-adjust:100%; }
   canvas.board { touch-action:none; }
-  #touch { display:none; width:100%; max-width:420px; padding:0 12px 8px; }
-  #touchInner { position:sticky; bottom:0; background:#0d102acc; backdrop-filter:blur(4px); border:1px solid var(--line); border-radius:14px; padding:2px 10px 12px; }
-  #touch .trow { display:flex; gap:10px; justify-content:center; margin-top:10px; }
-  #touch button { flex:1; font-size:22px; padding:14px 0; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; }
-  #touch button.hold { opacity:1; }
-  #touch button:active { background:#4a57b0; }
+  #flickHint { display:none; width:100%; max-width:420px; font-size:11px; color:#aab3e0; text-align:center; padding:0 12px 10px; }
   /* ランキング */
   #rank { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px 16px; width:100%; max-width:640px; margin:4px 12px 12px; }
   #rank h2 { margin:2px 0 8px; font-size:17px; text-align:center; }
@@ -76,11 +71,11 @@
     .side, #center { width:100%; max-width:420px; }
     canvas.board { width:min(200px,52vw); height:auto; }
     .nextbox canvas { width:72px; height:auto; }
-    #touch { display:block; }
+    #flickHint { display:block; }
     .ctl { display:none; }
   }
   @media (pointer:coarse) {
-    #touch { display:block; }
+    #flickHint { display:block; }
   }
 </style>
 </head>
@@ -171,20 +166,7 @@
 
 <div id="flickPad"><div class="fp-seg fp-base"></div><div class="fp-seg fp-hi"></div><div class="fp-center"></div><div class="fp-dot"></div></div>
 
-<div id="touch"><div id="touchInner">
-  <div class="trow">
-    <button data-k="ArrowLeft">◀</button>
-    <button data-k="ArrowDown">▼</button>
-    <button data-k="ArrowRight">▶</button>
-    <button data-k="ArrowUp">⟳</button>
-  </div>
-  <div class="trow">
-    <button data-k="KeyZ">⟲</button>
-    <button data-k="KeyC">HOLD</button>
-    <button data-k="Space" style="flex:2">⤓ DROP</button>
-  </div>
-  <div style="font-size:11px;color:#aab3e0;text-align:center;margin-top:6px">画面どこでもフリック可（盤面が見える位置でどうぞ）</div>
-</div></div>
+<div id="flickHint">画面どこでもフリック可（盤面が見える位置でどうぞ）</div>
 
 <div id="rank">
   <h2>🏆 T-AIと勝負してみよう！ランキング</h2>
@@ -478,25 +460,13 @@ window.addEventListener("keydown", (e) => {
   press(e.code);
 });
 window.addEventListener("keyup", (e) => { release(e.code); });
-// タッチボタン (長押し対応)
-document.querySelectorAll("#touch button").forEach((b) => {
-  const code = b.dataset.k;
-  const on = (e) => { e.preventDefault(); press(code); };
-  const off = (e) => { if (e) e.preventDefault(); release(code); };
-  b.addEventListener("touchstart", on, { passive: false });
-  b.addEventListener("touchend", off, { passive: false });
-  b.addEventListener("touchcancel", off, { passive: false });
-  b.addEventListener("mousedown", on);
-  b.addEventListener("mouseup", off);
-  b.addEventListener("mouseleave", () => release(code));
-});
 // ゲーム中の画面スクロール・ピンチズーム・長押しメニューを抑止
 document.addEventListener("touchmove", (e) => {
-  if (e.target.closest && e.target.closest("#touch, canvas.board, #youSide")) e.preventDefault();
+  if (e.target.closest && e.target.closest("canvas.board, #youSide")) e.preventDefault();
 }, { passive: false });
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 document.addEventListener("contextmenu", (e) => {
-  if (e.target.closest && e.target.closest("#touch, canvas.board, #youSide")) e.preventDefault();
+  if (e.target.closest && e.target.closest("canvas.board, #youSide")) e.preventDefault();
 });
 // ---------- フリックパッド (タッチ専用・押した位置に出現) ----------
 // 右/左: 1段階=1マス移動 / 2段階=高速連打

@@ -62,6 +62,14 @@
   #rankForm { display:none; gap:8px; margin-top:10px; justify-content:center; flex-wrap:wrap; align-items:center; }
   #rankForm input { background:#070a1a; color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:16px; width:160px; }
   #rankMsg { min-height:20px; font-size:13px; text-align:center; color:var(--acc); margin-top:6px; }
+  /* ---------- フリックパッド (押した位置に出現) ---------- */
+  #youSide { touch-action:none; }
+  #flickPad { position:fixed; left:0; top:0; width:170px; height:170px; display:none; z-index:30; pointer-events:none; transform:translate(-50%,-50%); }
+  .fp-seg { position:absolute; inset:0; border-radius:50%; -webkit-mask:radial-gradient(circle, transparent 0 50px, #000 51px); mask:radial-gradient(circle, transparent 0 50px, #000 51px); }
+  .fp-base { background:conic-gradient(#d7d7d7 0deg 38deg, transparent 38deg 52deg, #d7d7d7 52deg 128deg, transparent 128deg 142deg, #d7d7d7 142deg 218deg, transparent 218deg 232deg, #d7d7d7 232deg 308deg, transparent 308deg 322deg, #d7d7d7 322deg 360deg); opacity:.92; }
+  .fp-hi { opacity:0; }
+  .fp-center { position:absolute; left:50%; top:50%; width:104px; height:104px; transform:translate(-50%,-50%); background:#fff; border-radius:50%; box-shadow:0 2px 10px #0006; }
+  .fp-dot { position:absolute; left:50%; top:50%; width:30px; height:30px; transform:translate(-50%,-50%); background:#8a8f9e; border-radius:50%; }
   @media (max-width:720px) {
     header h1 { font-size:20px; }
     #wrap { gap:10px; padding:8px; }
@@ -83,7 +91,7 @@
 </header>
 
 <div id="wrap">
-  <div class="side you-side">
+  <div class="side you-side" id="youSide">
     <h2>🟦 <span id="leftName">YOU</span> <span class="tag" id="leftTag">あなた</span></h2>
     <div class="boards">
       <canvas id="pb" class="board" width="240" height="480"></canvas>
@@ -161,6 +169,8 @@
 <button class="primary" onclick="location.reload()">もう一度アタック</button></div></div>
 <div id="count"></div>
 
+<div id="flickPad"><div class="fp-seg fp-base"></div><div class="fp-seg fp-hi"></div><div class="fp-center"></div><div class="fp-dot"></div></div>
+
 <div id="touch"><div id="touchInner">
   <div class="trow">
     <button data-k="ArrowLeft">◀</button>
@@ -177,8 +187,9 @@
 
 <div id="rank">
   <h2>🏆 T-AIと勝負してみよう！ランキング</h2>
+  <div style="font-size:11px;color:#aab3e0;text-align:center;margin-bottom:6px">📱=この端末の記録 / 🌍=みんなの記録（初回読込時に取得）</div>
   <div style="text-align:center;margin-bottom:6px"><button id="rankReload">更新</button></div>
-  <table><thead><tr><th>順位</th><th>名前</th><th>LINES</th><th>結果</th><th>日時</th></tr></thead>
+  <table><thead><tr><th>順位</th><th>名前</th><th>LINES</th><th>結果</th><th>記録</th></tr></thead>
   <tbody id="rankBody"><tr><td colspan="5">読み込み中…</td></tr></tbody></table>
   <div id="rankMsg"></div>
 </div>
@@ -480,12 +491,113 @@ document.querySelectorAll("#touch button").forEach((b) => {
 });
 // ゲーム中の画面スクロール・ピンチズーム・長押しメニューを抑止
 document.addEventListener("touchmove", (e) => {
-  if (e.target.closest && e.target.closest("#touch, canvas.board")) e.preventDefault();
+  if (e.target.closest && e.target.closest("#touch, canvas.board, #youSide")) e.preventDefault();
 }, { passive: false });
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 document.addEventListener("contextmenu", (e) => {
-  if (e.target.closest && e.target.closest("#touch, canvas.board")) e.preventDefault();
+  if (e.target.closest && e.target.closest("#touch, canvas.board, #youSide")) e.preventDefault();
 });
+// ---------- フリックパッド (タッチ専用・押した位置に出現) ----------
+// 右/左: 1段階=1マス移動 / 2段階=高速連打
+// 下: 1段階=ソフトドロップ / 2段階=ハードドロップ
+// 上: 回転 (単発)
+const flick = { id: null, ox: 0, oy: 0, dir: null, stage: 0, hardDropped: false, repTimer: null };
+const FLICK_ST1 = 24, FLICK_ST2 = 64, FLICK_REP = 55;
+const FP_HI = {
+  up: (c) => `conic-gradient(${c} 0deg 38deg, transparent 38deg 322deg, ${c} 322deg 360deg)`,
+  right: (c) => `conic-gradient(transparent 0deg 52deg, ${c} 52deg 128deg, transparent 128deg 360deg)`,
+  down: (c) => `conic-gradient(transparent 0deg 142deg, ${c} 142deg 218deg, transparent 218deg 360deg)`,
+  left: (c) => `conic-gradient(transparent 0deg 232deg, ${c} 232deg 308deg, transparent 308deg 360deg)`,
+};
+function stepMove(d){
+  if (!PG.cells || P.over || !running || paused) return;
+  if (!collide(P.board, PG.cells, PG.x + d, PG.y)) { PG.x += d; PG.lockAcc = 0; }
+}
+function flickSetHi(dir, stage){
+  const hi = $("flickPad").querySelector(".fp-hi");
+  if (!dir) { hi.style.opacity = 0; return; }
+  const c = stage >= 2 ? "rgba(255,145,0,.95)" : "rgba(93,242,255,.7)";
+  hi.style.background = FP_HI[dir](c);
+  hi.style.opacity = 1;
+}
+function flickShow(x, y){
+  const pad = $("flickPad");
+  pad.style.left = x + "px"; pad.style.top = y + "px";
+  pad.style.display = "block";
+  flickSetHi(null, 0);
+}
+function flickHide(){ $("flickPad").style.display = "none"; }
+function flickExit(){
+  if (flick.repTimer) { clearInterval(flick.repTimer); flick.repTimer = null; }
+  keys.ArrowDown = false;
+}
+function flickEnter(dir, stage){
+  if (dir === "left" || dir === "right") {
+    const d = dir === "left" ? -1 : 1;
+    stepMove(d);
+    if (stage >= 2) flick.repTimer = setInterval(() => stepMove(d), FLICK_REP);
+  } else if (dir === "down") {
+    if (stage >= 2) {
+      if (!flick.hardDropped) { flick.hardDropped = true; lockPlayer(true); }
+    } else keys.ArrowDown = true;
+  } else if (dir === "up") tryRot(1);
+  flickSetHi(dir, stage);
+}
+function flickMove(dx, dy){
+  const adx = Math.abs(dx), ady = Math.abs(dy);
+  const dist = Math.max(adx, ady);
+  const dir = dist < 12 ? null : (adx > ady ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
+  const stage = !dir ? 0 : (dist >= FLICK_ST2 ? 2 : 1);
+  if (dir !== flick.dir) {
+    flickExit(); flick.dir = dir; flick.stage = stage;
+    if (dir) flickEnter(dir, stage); else flickSetHi(null, 0);
+  } else if (stage !== flick.stage) {
+    flick.stage = stage;
+    if (dir === "left" || dir === "right") {
+      flickExit();
+      if (stage >= 2) { const d = dir === "left" ? -1 : 1; flick.repTimer = setInterval(() => stepMove(d), FLICK_REP); }
+      flickSetHi(dir, stage);
+    } else if (dir === "down") {
+      if (stage >= 2) { keys.ArrowDown = false; if (!flick.hardDropped) { flick.hardDropped = true; lockPlayer(true); } }
+      else keys.ArrowDown = true;
+      flickSetHi(dir, stage);
+    }
+    // upは単発なのでstage変化では何もしない
+  }
+}
+function flickReset(){
+  if (flick.repTimer) { clearInterval(flick.repTimer); flick.repTimer = null; }
+  keys.ArrowDown = false;
+  flick.id = null; flick.dir = null; flick.stage = 0; flick.hardDropped = false;
+  const pad = $("flickPad");
+  if (pad) pad.style.display = "none";
+}
+(function initFlick(){
+  const fz = $("youSide");
+  fz.addEventListener("touchstart", (e) => {
+    if (!running || paused || P.over || !PG.cells || flick.id !== null) return;
+    const t = e.changedTouches[0];
+    flick.id = t.identifier; flick.ox = t.clientX; flick.oy = t.clientY;
+    flick.dir = null; flick.stage = 0; flick.hardDropped = false;
+    flickShow(t.clientX, t.clientY);
+    e.preventDefault();
+  }, { passive: false });
+  fz.addEventListener("touchmove", (e) => {
+    if (flick.id === null) return;
+    for (const t of e.changedTouches) {
+      if (t.identifier === flick.id) flickMove(t.clientX - flick.ox, t.clientY - flick.oy);
+    }
+    e.preventDefault();
+  }, { passive: false });
+  const flickEnd = (e) => {
+    if (flick.id === null) return;
+    for (const t of e.changedTouches) {
+      if (t.identifier === flick.id) { flickReset(); break; }
+    }
+  };
+  fz.addEventListener("touchend", flickEnd);
+  fz.addEventListener("touchcancel", flickEnd);
+})();
 function tryRot(d){
   const nr = (PG.rot + d + 4) % 4, cells = rotState(P.cur, nr);
   for (const dx of [0, -1, 1, -2, 2]) {
@@ -616,6 +728,7 @@ const timeAttack = true;
 const TIME_LIMIT = 30;
 function gameOver(title, sub){
   if (!running) return; running = false;
+  flickReset();
   $("resTitle").textContent = title;
   $("resSub").textContent = sub + " (" + P.lines + " vs " + A.lines + " LINES)";
   $("overlay").style.display = "flex"; $("status").textContent = "終了";
@@ -629,67 +742,63 @@ function gameOver(title, sub){
   if (saved) { $("rankName").value = saved; $("nick").value = saved; }
 }
 
-// ---------- ランキング (D1 + ローカルフォールバック) ----------
+// ---------- ランキング (端末ローカル保存・クラウドは初回読込のみ参照) ----------
 let lastResult = null;
 const LS_KEY = "tai_rank_local";
 const LS_NAME = "tai_player_name";
+const LS_CLOUD = "tai_rank_cloud";
+let cloudSnapshot = [];
 function loadLocalName(){ try { return localStorage.getItem(LS_NAME) || ""; } catch { return ""; } }
 function esc(s){ return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-async function loadRanking(){
+function renderRanking(){
   const tb = $("rankBody");
+  let local = [];
+  try { local = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch (e) {}
+  const all = [
+    ...local.map((s) => ({ name: s.name, lines: s.lines, won: s.won, src: "📱" })),
+    ...cloudSnapshot.map((s) => ({ name: s.name, lines: s.lines, won: s.won, src: "🌍" })),
+  ].sort((a, b) => b.lines - a.lines).slice(0, 10);
+  if (!all.length) { tb.innerHTML = '<tr><td colspan="5">まだ記録がありません。最初の挑戦者に！</td></tr>'; return; }
+  tb.innerHTML = all.map((s, i) =>
+    `<tr><td>${i + 1}</td><td>${esc(s.name)}</td><td>${s.lines}</td>` +
+    `<td>${s.won ? "🏆勝利" : "敗北"}</td><td>${s.src}</td></tr>`
+  ).join("");
+}
+async function loadRanking(){
+  // クラウド参照はこの初回読み込み時のみ。以降の記録は端末内。
   try {
-    const r = await fetch("api/rank?limit=10");
+    const r = await fetch("api/rank?limit=20");
     if (!r.ok) throw new Error("api " + r.status);
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || "api error");
-    if (!j.ranking.length) { tb.innerHTML = '<tr><td colspan="5">まだ記録がありません。最初の挑戦者に！</td></tr>'; return; }
-    tb.innerHTML = j.ranking.map((s, i) =>
-      `<tr><td>${i + 1}</td><td>${esc(s.name)}</td><td>${s.lines}</td>` +
-      `<td>${s.won ? "🏆勝利" : "敗北"}</td>` +
-      `<td>${esc((s.created_at || "").slice(0, 16).replace("T", " "))}</td></tr>`
-    ).join("");
-    $("rankMsg").textContent = "";
+    cloudSnapshot = j.ranking || [];
+    try { localStorage.setItem(LS_CLOUD, JSON.stringify({ at: Date.now(), list: cloudSnapshot })); } catch (e) {}
   } catch (e) {
-    // APIなし(file直開き等)はローカル記録を表示
-    let local = [];
-    try { local = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch {}
-    if (!local.length) { tb.innerHTML = '<tr><td colspan="5">記録なし（オンライン時に自動取得します）</td></tr>'; return; }
-    local.sort((a, b) => b.lines - a.lines);
-    tb.innerHTML = local.slice(0, 10).map((s, i) =>
-      `<tr><td>${i + 1}</td><td>${esc(s.name)}</td><td>${s.lines}</td>` +
-      `<td>${s.won ? "🏆勝利" : "敗北"}</td><td>-</td></tr>`
-    ).join("");
-    $("rankMsg").textContent = "※オフライン表示（この端末の記録）";
+    try {
+      const c = JSON.parse(localStorage.getItem(LS_CLOUD) || "null");
+      cloudSnapshot = (c && c.list) || [];
+    } catch (e2) { cloudSnapshot = []; }
   }
+  renderRanking();
+  $("rankMsg").textContent = "";
 }
 async function submitRanking(){
   const name = $("rankName").value.trim();
   if (!name) { $("rankMsg").textContent = "名前を入力してください"; return; }
   if (!lastResult) return;
   $("rankSubmit").disabled = true;
-  const payload = { name: name.slice(0, 12), lines: lastResult.lines, won: lastResult.won, mode: lastResult.mode };
+  const payload = { name: name.slice(0, 12), lines: lastResult.lines, won: lastResult.won, mode: "timeattack", created_at: new Date().toISOString() };
   try { localStorage.setItem(LS_NAME, payload.name); } catch (e2) {}
   try {
-    const r = await fetch("api/rank", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error || "登録失敗");
-    $("rankMsg").textContent = `登録完了！ あなたは第${j.rank}位です🎉`;
-    lastResult = null;
-    $("rankForm").style.display = "none";
-  } catch (e) {
-    // フォールバック: ローカル保存
-    try {
-      const local = JSON.parse(localStorage.getItem(LS_KEY) || "[]");
-      local.push({ ...payload, created_at: new Date().toISOString() });
-      localStorage.setItem(LS_KEY, JSON.stringify(local.slice(-50)));
-      $("rankMsg").textContent = "オンライン登録できませんでした。この端末に保存しました";
-    } catch { $("rankMsg").textContent = "登録できませんでした: " + e.message; }
-    lastResult = null;
-    $("rankForm").style.display = "none";
-  } finally {
-    $("rankSubmit").disabled = false;
-    loadRanking();
-  }
+    const local = JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+    local.push(payload);
+    localStorage.setItem(LS_KEY, JSON.stringify(local.slice(-100)));
+    $("rankMsg").textContent = "記録をこの端末に保存しました📱";
+  } catch (e) { $("rankMsg").textContent = "保存できませんでした"; }
+  lastResult = null;
+  $("rankForm").style.display = "none";
+  $("rankSubmit").disabled = false;
+  renderRanking();
 }
 $("rankSubmit").onclick = submitRanking;
 $("rankReload").onclick = loadRanking;
@@ -698,6 +807,7 @@ function reset(){
   P = mkSide(); A = mkSide(); aiAnim = null; aiTimer = 0;
   elapsed = 0; dasAcc = 0; garbAcc = 0;
   PG.cells = null; P.cur = null;
+  flickReset();
   $("overlay").style.display = "none"; $("status").textContent = "待機中";
   $("pauseBtn").disabled = true; $("pauseBtn").textContent = "一時停止"; $("startBtn").disabled = false;
   render(); updateHud();

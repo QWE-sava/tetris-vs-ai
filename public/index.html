@@ -183,6 +183,7 @@
     <button data-k="KeyC">HOLD</button>
     <button data-k="Space" style="flex:2">⤓ DROP</button>
   </div>
+  <div style="font-size:11px;color:#aab3e0;text-align:center;margin-top:6px">画面どこでもフリック可（盤面が見える位置でどうぞ）</div>
 </div></div>
 
 <div id="rank">
@@ -513,6 +514,8 @@ function stepMove(d){
   if (!PG.cells || P.over || !running || paused) return;
   if (!collide(P.board, PG.cells, PG.x + d, PG.y)) { PG.x += d; PG.lockAcc = 0; }
 }
+// 振動 (Androidのみ有効。iPadにモーターはなく、iPhoneのSafariもVibration API未対応)
+function buzz(ms){ try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
 function flickSetHi(dir, stage){
   const hi = $("flickPad").querySelector(".fp-hi");
   if (!dir) { hi.style.opacity = 0; return; }
@@ -538,9 +541,10 @@ function flickEnter(dir, stage){
     if (stage >= 2) flick.repTimer = setInterval(() => stepMove(d), FLICK_REP);
   } else if (dir === "down") {
     if (stage >= 2) {
-      if (!flick.hardDropped) { flick.hardDropped = true; lockPlayer(true); }
+      if (!flick.hardDropped) { flick.hardDropped = true; buzz(30); lockPlayer(true); }
     } else keys.ArrowDown = true;
   } else if (dir === "up") tryRot(1);
+  if (stage >= 2 && (dir === "left" || dir === "right")) buzz(12);
   flickSetHi(dir, stage);
 }
 function flickMove(dx, dy){
@@ -555,10 +559,10 @@ function flickMove(dx, dy){
     flick.stage = stage;
     if (dir === "left" || dir === "right") {
       flickExit();
-      if (stage >= 2) { const d = dir === "left" ? -1 : 1; flick.repTimer = setInterval(() => stepMove(d), FLICK_REP); }
+      if (stage >= 2) { const d = dir === "left" ? -1 : 1; flick.repTimer = setInterval(() => stepMove(d), FLICK_REP); buzz(12); }
       flickSetHi(dir, stage);
     } else if (dir === "down") {
-      if (stage >= 2) { keys.ArrowDown = false; if (!flick.hardDropped) { flick.hardDropped = true; lockPlayer(true); } }
+      if (stage >= 2) { keys.ArrowDown = false; if (!flick.hardDropped) { flick.hardDropped = true; buzz(30); lockPlayer(true); } }
       else keys.ArrowDown = true;
       flickSetHi(dir, stage);
     }
@@ -573,16 +577,18 @@ function flickReset(){
   if (pad) pad.style.display = "none";
 }
 (function initFlick(){
-  const fz = $("youSide");
-  fz.addEventListener("touchstart", (e) => {
+  // 画面どこでもフリック開始可 (ボタン・入力欄・リンクは除外)。盤面を指で隠さない位置で操作できる。
+  const isUI = (t) => t.closest && t.closest("button, input, select, textarea, a");
+  document.addEventListener("touchstart", (e) => {
     if (!running || paused || P.over || !PG.cells || flick.id !== null) return;
+    if (isUI(e.target)) return;
     const t = e.changedTouches[0];
     flick.id = t.identifier; flick.ox = t.clientX; flick.oy = t.clientY;
     flick.dir = null; flick.stage = 0; flick.hardDropped = false;
     flickShow(t.clientX, t.clientY);
     e.preventDefault();
   }, { passive: false });
-  fz.addEventListener("touchmove", (e) => {
+  document.addEventListener("touchmove", (e) => {
     if (flick.id === null) return;
     for (const t of e.changedTouches) {
       if (t.identifier === flick.id) flickMove(t.clientX - flick.ox, t.clientY - flick.oy);
@@ -595,8 +601,8 @@ function flickReset(){
       if (t.identifier === flick.id) { flickReset(); break; }
     }
   };
-  fz.addEventListener("touchend", flickEnd);
-  fz.addEventListener("touchcancel", flickEnd);
+  document.addEventListener("touchend", flickEnd);
+  document.addEventListener("touchcancel", flickEnd);
 })();
 function tryRot(d){
   const nr = (PG.rot + d + 4) % 4, cells = rotState(P.cur, nr);

@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>T-AI vs YOU — テトリス対戦</title>
+<style>
+  :root { --bg:#0d1021; --panel:#171c36; --line:#2a3160; --txt:#e8ecff; --acc:#5df2ff; --ai:#ff5d7a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:radial-gradient(1200px 800px at 50% -10%, #1c2450 0%, var(--bg) 60%); color:var(--txt); font-family:"Segoe UI","Hiragino Kaku Gothic ProN",Meiryo,sans-serif; min-height:100vh; display:flex; flex-direction:column; align-items:center; }
+  header { text-align:center; padding:14px 10px 4px; }
+  header h1 { margin:0; font-size:26px; letter-spacing:2px; }
+  header h1 .you { color:var(--acc); } header h1 .ai { color:var(--ai); }
+  header p { margin:4px 0 0; color:#aab3e0; font-size:13px; }
+  #wrap { display:flex; gap:14px; align-items:flex-start; justify-content:center; padding:12px; flex-wrap:wrap; width:100%; max-width:1100px; }
+  .side { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:10px 12px 12px; width:300px; }
+  .side.ai-side { box-shadow:0 0 0 1px #ff5d7a33, 0 8px 40px #ff5d7a22; }
+  .side.you-side { box-shadow:0 0 0 1px #5df2ff33, 0 8px 40px #5df2ff18; }
+  .side h2 { margin:2px 0 8px; font-size:17px; display:flex; justify-content:space-between; align-items:center; }
+  .tag { font-size:11px; padding:2px 8px; border-radius:20px; background:#ffffff14; }
+  .boards { display:flex; gap:8px; justify-content:center; }
+  canvas.board { background:#070a1a; border:1px solid var(--line); border-radius:8px; }
+  .nextbox { display:flex; flex-direction:column; gap:8px; align-items:center; }
+  .nextbox canvas { background:#070a1a; border:1px solid var(--line); border-radius:8px; }
+  .nextbox span { font-size:11px; color:#aab3e0; }
+  .stats { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; margin-top:10px; font-size:13px; }
+  .stats b { font-size:16px; }
+  .garbage { margin-top:6px; min-height:20px; font-size:13px; color:#ffb84d; text-align:center; }
+  #center { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px 16px; width:300px; text-align:center; }
+  #timer { font-size:34px; font-weight:700; font-variant-numeric:tabular-nums; margin:2px 0; }
+  #status { min-height:24px; font-size:15px; font-weight:700; color:var(--acc); }
+  .btnrow { display:flex; gap:8px; justify-content:center; margin:8px 0; flex-wrap:wrap; }
+  button { background:#2a3370; color:#fff; border:1px solid #3d48a0; border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer; }
+  button:hover { background:#35408c; } button:disabled { opacity:.4; cursor:default; }
+  button.primary { background:linear-gradient(135deg,#00c6ff,#0072ff); border:none; font-weight:700; }
+  .ctl { text-align:left; font-size:12px; color:#c3cbf2; background:#ffffff08; border-radius:8px; padding:8px 10px; margin-top:8px; line-height:1.9; }
+  .ctl kbd { background:#00000060; border:1px solid #ffffff30; border-radius:4px; padding:0 6px; font-family:inherit; }
+  .speedbox { margin-top:10px; font-size:13px; background:#ffffff08; border-radius:8px; padding:8px 10px; }
+  .speedbox input { width:100%; }
+  #overlay { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#04061acc; z-index:10; }
+  #overlay .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:30px 44px; text-align:center; }
+  #overlay .card h2 { font-size:32px; margin:0 0 6px; }
+  #count { position:fixed; inset:0; display:none; align-items:center; justify-content:center; font-size:120px; font-weight:900; color:#fff; text-shadow:0 0 40px var(--acc); z-index:11; pointer-events:none; }
+  footer { color:#7c86b8; font-size:12px; padding:8px 12px 20px; text-align:center; max-width:900px; }
+  /* ---------- スマホ対応 ---------- */
+  html { overscroll-behavior:none; }
+  body { overscroll-behavior:none; -webkit-text-size-adjust:100%; }
+  canvas.board { touch-action:none; }
+  #touch { display:none; width:100%; max-width:420px; padding:0 12px 8px; }
+  #touchInner { position:sticky; bottom:0; background:#0d102acc; backdrop-filter:blur(4px); border:1px solid var(--line); border-radius:14px; padding:2px 10px 12px; }
+  #touch .trow { display:flex; gap:10px; justify-content:center; margin-top:10px; }
+  #touch button { flex:1; font-size:22px; padding:14px 0; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; }
+  #touch button.hold { opacity:1; }
+  #touch button:active { background:#4a57b0; }
+  /* ランキング */
+  #rank { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px 16px; width:100%; max-width:640px; margin:4px 12px 12px; }
+  #rank h2 { margin:2px 0 8px; font-size:17px; text-align:center; }
+  #rank table { width:100%; border-collapse:collapse; font-size:13px; }
+  #rank th, #rank td { padding:5px 6px; border-bottom:1px solid #ffffff12; text-align:center; }
+  #rank th { color:#aab3e0; font-weight:400; }
+  #rank .me { color:var(--acc); font-weight:700; }
+  #rankForm { display:none; gap:8px; margin-top:10px; justify-content:center; flex-wrap:wrap; align-items:center; }
+  #rankForm input { background:#070a1a; color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:16px; width:160px; }
+  #rankMsg { min-height:20px; font-size:13px; text-align:center; color:var(--acc); margin-top:6px; }
+  @media (max-width:720px) {
+    header h1 { font-size:20px; }
+    #wrap { gap:10px; padding:8px; }
+    .side, #center { width:100%; max-width:420px; }
+    canvas.board { width:min(200px,52vw); height:auto; }
+    .nextbox canvas { width:72px; height:auto; }
+    #touch { display:block; }
+    .ctl { display:none; }
+  }
+  @media (pointer:coarse) {
+    #touch { display:block; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="you">YOU</span> vs <span class="ai">T-AI</span> — テトリス対戦</h1>
+  <p>⏱️ 30秒で消したライン数をT-AIと競うタイムアタック（おじゃまあり）</p>
+</header>
+
+<div id="wrap">
+  <div class="side you-side">
+    <h2>🟦 <span id="leftName">YOU</span> <span class="tag" id="leftTag">あなた</span></h2>
+    <div class="boards">
+      <canvas id="pb" class="board" width="240" height="480"></canvas>
+      <div class="nextbox">
+        <span>NEXT</span><canvas id="pn" width="96" height="240"></canvas>
+        <span>HOLD</span><canvas id="ph" width="96" height="60"></canvas>
+      </div>
+    </div>
+    <div class="stats">
+      <div>LINES<br><b id="pl">0</b></div>
+      <div>攻撃<br><b id="pa">0</b></div>
+      <div>REN<br><b id="pr">0</b></div>
+      <div>PIECES<br><b id="pp">0</b></div>
+    </div>
+    <div class="garbage" id="pg"></div>
+  </div>
+
+  <div id="center">
+    <div style="font-size:12px;color:#aab3e0">MATCH TIME</div>
+    <div id="timer">0:00</div>
+    <div id="status">待機中</div>
+    <div style="margin:2px 0 6px"><input id="nick" maxlength="12" placeholder="ニックネーム（ランキング用）" style="background:#070a1a;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:16px;width:200px;text-align:center"></div>
+    <div style="font-size:12px;color:#aab3e0" id="modeLabel">⏱️ 30秒アタック（おじゃまあり）</div>
+    <div class="btnrow">
+      <button id="startBtn" class="primary">アタック開始</button>
+      <button id="pauseBtn" disabled>一時停止</button>
+      <button id="resetBtn">リセット</button>
+    </div>
+    <div class="speedbox">
+      <div>🤖 AI速度: <b id="spdLabel">0.60秒/手 ≒ 20L/30秒</b></div>
+      <input id="spd" type="range" min="0.3" max="1.5" step="0.05" value="0.6">
+      <div style="display:flex;gap:6px;justify-content:center;margin-top:4px">
+        <button data-spd="1.1">ゆっくり</button>
+        <button data-spd="0.6">標準</button>
+        <button data-spd="0.35">速い</button>
+      </div>
+      <div style="margin-top:6px">
+        <button id="ultraBtn" style="width:100%;font-weight:700;border-color:#ff3d5a">⚡ ULTRA MODE ⚡</button>
+      </div>
+      <div>⚡間隔: <b id="ultraLabel">0.05秒/手</b></div>
+      <input id="ultraSpd" type="range" min="0.01" max="0.1" step="0.01" value="0.05">
+      <div style="font-size:11px;color:#aab3e0;margin-top:4px">AIの思考自体は一瞬。わざと待たせて人間の見える速さにしています。</div>
+    </div>
+    <div class="ctl">
+      <kbd>←</kbd><kbd>→</kbd> 移動 / <kbd>↓</kbd> ソフトドロップ<br>
+      <kbd>↑</kbd>/<kbd>X</kbd> 右回転 / <kbd>Z</kbd> 左回転<br>
+      <kbd>Space</kbd> ハードドロップ / <kbd>C</kbd> ホールド<br>
+      <kbd>P</kbd> 一時停止 / <kbd>R</kbd> リスタート<br>
+      ライン消去で相手におじゃまを送れます💣<br>
+      (2列=1段, 3列=2段, TETRIS=4段)
+    </div>
+  </div>
+
+  <div class="side ai-side">
+    <h2>🟥 T-AI <span class="tag" id="wtag">gen100</span></h2>
+    <div class="boards">
+      <canvas id="ab" class="board" width="240" height="480"></canvas>
+      <div class="nextbox">
+        <span>NEXT</span><canvas id="an" width="96" height="240"></canvas>
+        <span>狙い</span><canvas id="ah" width="96" height="60"></canvas>
+      </div>
+    </div>
+    <div class="stats">
+      <div>LINES<br><b id="al">0</b></div>
+      <div>攻撃<br><b id="aa">0</b></div>
+      <div>REN<br><b id="ar">0</b></div>
+      <div>PIECES<br><b id="ap">0</b></div>
+    </div>
+    <div class="garbage" id="ag"></div>
+  </div>
+</div>
+
+<div id="overlay"><div class="card"><h2 id="resTitle"></h2><p id="resSub"></p>
+<div id="rankForm"><input id="rankName" maxlength="12" placeholder="名前（12文字まで）"><button id="rankSubmit" class="primary">記録を登録</button></div>
+<button class="primary" onclick="location.reload()">もう一度アタック</button></div></div>
+<div id="count"></div>
+
+<div id="touch"><div id="touchInner">
+  <div class="trow">
+    <button data-k="ArrowLeft">◀</button>
+    <button data-k="ArrowDown">▼</button>
+    <button data-k="ArrowRight">▶</button>
+    <button data-k="ArrowUp">⟳</button>
+  </div>
+  <div class="trow">
+    <button data-k="KeyZ">⟲</button>
+    <button data-k="KeyC">HOLD</button>
+    <button data-k="Space" style="flex:2">⤓ DROP</button>
+  </div>
+</div></div>
+
+<div id="rank">
+  <h2>🏆 T-AIと勝負してみよう！ランキング</h2>
+  <div style="text-align:center;margin-bottom:6px"><button id="rankReload">更新</button></div>
+  <table><thead><tr><th>順位</th><th>名前</th><th>LINES</th><th>結果</th><th>日時</th></tr></thead>
+  <tbody id="rankBody"><tr><td colspan="5">読み込み中…</td></tr></tbody></table>
+  <div id="rankMsg"></div>
+</div>
+
+<footer>
+  重み: best_gen_0100.json を内蔵 (aggregate_height <span id="w0"></span> / holes <span id="w2"></span> / cleared_lines <span id="w5"></span>)。
+  学習時 (CUDA評価・40手/秒・1200手) と同一の評価式で全配置を探索し最良手を選択します。速度制限は手と手の間隔のみです。
+</footer>
+
+<script>
+"use strict";
+/* ============================================================
+   T-AI 対戦UI
+   - 学習コードと完全互換の評価式 (6重み線形ヒューリスティック)
+   - 重みは best_gen_0100.json を埋め込み
+   - AIは思考一瞬・わざと待機して 20LINE/30秒 相当に調整
+   ============================================================ */
+const $ = (id) => document.getElementById(id);
+// 実戦重み (best_gen_0100.json)
+let W = { aggregate_height:-1.1778708696365356, max_height:-0.06713330000638962,
+  holes:-1.2898045778274536, bumpiness:-0.1808600276708603,
+  wells:-0.23975726962089539, cleared_lines:0.6455249786376953 };
+function refreshW(){
+  $("w0").textContent = W.aggregate_height.toFixed(2);
+  $("w2").textContent = W.holes.toFixed(2);
+  $("w5").textContent = "+" + W.cleared_lines.toFixed(2);
+}
+refreshW();
+// http経由で開いた場合は外部jsonがあれば優先
+if (typeof fetch === "function") {
+  fetch("best_gen_0100.json").then((r) => (r.ok ? r.json() : null)).then((j) => {
+    if (j && j.weights) {
+      W = j.weights;
+      $("wtag").textContent = "gen" + (j.generation != null ? j.generation : 100);
+      refreshW();
+    }
+  }).catch(() => {});
+}
+
+const COLS = 10, ROWS = 20, FULL = (1 << COLS) - 1;
+const COLORS = ["", "#00e5ff", "#ffd600", "#c651ff", "#00e676", "#ff3d5a", "#ff9100", "#3d7bff"];
+// 学習コード BASE_PIECES と同一 (y-up座標)
+const BASE = { I:[[0,0],[1,0],[2,0],[3,0]], O:[[0,0],[1,0],[0,1],[1,1]],
+  T:[[0,0],[1,0],[2,0],[1,1]], J:[[0,0],[0,1],[1,0],[2,0]],
+  L:[[0,0],[1,0],[2,0],[2,1]], S:[[1,0],[2,0],[0,1],[1,1]], Z:[[0,0],[1,0],[1,1],[2,1]] };
+const PNAMES = Object.keys(BASE);
+const norm = (c) => {
+  const mx = Math.min(...c.map((p) => p[0])), my = Math.min(...c.map((p) => p[1]));
+  return c.map((p) => [p[0] - mx, p[1] - my]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+};
+const rot = (c) => norm(c.map(([x, y]) => [y, -x]));
+const key = (c) => JSON.stringify(c);
+// 全合法配置 (学習コード build_actions と同一)
+function buildActions(){
+  const A = [];
+  for (const name of PNAMES) {
+    const states = []; let s = norm(BASE[name]);
+    for (let i = 0; i < 4; i++) { if (!states.some((t) => key(t) === key(s))) states.push(s); s = rot(s); }
+    const acts = [];
+    for (const st of states) {
+      const w = Math.max(...st.map((p) => p[0])) + 1, h = Math.max(...st.map((p) => p[1])) + 1;
+      for (let x0 = 0; x0 <= COLS - w; x0++) acts.push({ cells: st.map(([x, y]) => [x0 + x, y]), h });
+    }
+    A.push(acts);
+  }
+  return A;
+}
+const ACTIONS = buildActions();
+
+// ---------- Board (bitmask rows, row0=bottom。学習カーネルと同等) ----------
+class Board {
+  constructor(){ this.rows = new Array(ROWS).fill(0); this.color = Array.from({length: ROWS}, () => new Array(COLS).fill(0)); }
+  heights(){
+    const h = new Array(COLS).fill(0);
+    for (let c = 0; c < COLS; c++) for (let r = ROWS - 1; r >= 0; r--) if (this.rows[r] & (1 << c)) { h[c] = r + 1; break; }
+    return h;
+  }
+  // 配置→消去シミュレーション (非破壊)。cells: [絶対x, ピース内y]
+  simulate(cells){
+    const H = this.heights();
+    let dy = 0;
+    for (const [x, y] of cells) dy = Math.max(dy, H[x] - y);
+    const ph = Math.max(...cells.map((p) => p[1])) + 1;
+    if (dy + ph > ROWS) return null;
+    const tmp = this.rows.slice();
+    for (const [x, y] of cells) tmp[dy + y] |= (1 << x);
+    let cleared = 0; const kept = [];
+    for (let r = 0; r < ROWS; r++) { if (tmp[r] === FULL) cleared++; else kept.push(tmp[r]); }
+    while (kept.length < ROWS) kept.push(0);
+    return { cleared, rows: kept, dy };
+  }
+  commit(cells, pid){
+    const s = this.simulate(cells); if (!s) return -1;
+    const nc = this.color.map((r) => r.slice());
+    for (const [x, y] of cells) if (s.dy + y < ROWS) nc[s.dy + y][x] = pid + 1;
+    const kept = [];
+    for (let r = 0; r < ROWS; r++) {
+      let m = 0; for (let c = 0; c < COLS; c++) if (nc[r][c]) m |= (1 << c);
+      if (m !== FULL) kept.push(nc[r]);
+    }
+    while (kept.length < ROWS) kept.push(new Array(COLS).fill(0));
+    this.rows = s.rows; this.color = kept;
+    return s.cleared;
+  }
+  // プレイヤー用: 現在位置そのままで固定 (せり出しの下に潜り込んだ場合もワープしない)。
+  // cells: [絶対x, 絶対y]。全セルが盤内にあること。
+  commitAbsolute(cells, pid){
+    const nc = this.color.map((r) => r.slice());
+    const nr = this.rows.slice();
+    for (const [x, y] of cells) { nr[y] |= (1 << x); nc[y][x] = pid + 1; }
+    const kr = [], kc = []; let cl = 0;
+    for (let r = 0; r < ROWS; r++) { if (nr[r] === FULL) cl++; else { kr.push(nr[r]); kc.push(nc[r]); } }
+    while (kr.length < ROWS) { kr.push(0); kc.push(new Array(COLS).fill(0)); }
+    this.rows = kr; this.color = kc;
+    return cl;
+  }
+  addGarbage(n, rng){
+    for (let i = 0; i < n; i++) {
+      const hole = (rng() * COLS) | 0;
+      this.rows.pop(); this.color.pop();
+      let m = 0; for (let c = 0; c < COLS; c++) if (c !== hole) m |= (1 << c);
+      this.rows.unshift(m);
+      const r = new Array(COLS).fill(8); r[hole] = 0;
+      this.color.unshift(r);
+    }
+  }
+}
+
+// ---------- 学習と同一の特徴量・評価 ----------
+function features(rowsAfter, cleared){
+  let agg = 0, mx = 0, holes = 0; const lh = new Array(COLS).fill(0);
+  for (let c = 0; c < COLS; c++) {
+    let h = 0;
+    for (let r = ROWS - 1; r >= 0; r--) if (rowsAfter[r] & (1 << c)) { h = r + 1; break; }
+    lh[c] = h; agg += h; if (h > mx) mx = h;
+    let fill = 0; for (let r = 0; r < h; r++) if (rowsAfter[r] & (1 << c)) fill++;
+    holes += h - fill;
+  }
+  let bump = 0; for (let c = 0; c < 9; c++) bump += Math.abs(lh[c + 1] - lh[c]);
+  let wells = 0;
+  for (let c = 0; c < COLS; c++) {
+    const L = c === 0 ? ROWS : lh[c - 1], R = c === 9 ? ROWS : lh[c + 1];
+    const d = Math.min(L, R) - lh[c]; if (d > 0) wells += d;
+  }
+  return [agg / 200, mx / 20, holes / 200, bump / 180, wells / 180, cleared / 4];
+}
+function think(board, pid){
+  const w = [W.aggregate_height, W.max_height, W.holes, W.bumpiness, W.wells, W.cleared_lines];
+  let best = null, bs = -1e30;
+  for (const a of ACTIONS[pid]) {
+    const s = board.simulate(a.cells); if (!s) continue;
+    const f = features(s.rows, s.cleared);
+    let sc = 0; for (let i = 0; i < 6; i++) sc += w[i] * f[i];
+    if (sc > bs) { bs = sc; best = a; }
+  }
+  return best;
+}
+
+// ---------- 対戦状態 ----------
+const rng = Math.random;
+function bag(){
+  const b = [0, 1, 2, 3, 4, 5, 6];
+  for (let i = b.length - 1; i > 0; i--) { const j = (rng() * (i + 1)) | 0; [b[i], b[j]] = [b[j], b[i]]; }
+  return b;
+}
+function mkSide(){
+  return { board: new Board(), queue: [...bag(), ...bag()], lines: 0, pieces: 0,
+    ren: -1, atk: 0, over: false, pending: 0, cur: null, hold: -1, holdUsed: false };
+}
+let P = mkSide(), A = mkSide();
+let running = false, paused = false, elapsed = 0, startTime = 0, lastTick = 0;
+let aiTimer = 0, aiAnim = null;
+let aiInterval = 0.6, dasAcc = 0, garbAcc = 0;
+let ultra = false;
+let ultraIv = 0.05; // ULTRA時のAI間隔(秒/手)。思考は一瞬なのでほぼ学習時(40手/秒)以上の速度
+function effInterval(){ return ultra ? ultraIv : aiInterval; }
+function updateSpdLabel(){
+  $("spdLabel").textContent = ultra
+    ? "ULTRA ⚡ " + ultraIv.toFixed(2) + "秒/手 ≒ " + Math.round(30 / ultraIv * 0.4) + "L/30秒"
+    : aiInterval.toFixed(2) + "秒/手 ≒ " + Math.round(30 / aiInterval * 0.45) + "L/30秒";
+  $("ultraLabel").textContent = ultraIv.toFixed(2) + "秒/手";
+}
+const pctx = $("pb").getContext("2d"), actx = $("ab").getContext("2d");
+
+// プレイヤー落下制御 (PG.y は bottom基準の絶対ベースy)
+const PG = { y: 0, x: 3, rot: 0, cells: null, dropAcc: 0, lockAcc: 0 };
+function rotState(pid, r){ let s = norm(BASE[PNAMES[pid]]); const n = ((r % 4) + 4) % 4; for (let i = 0; i < n; i++) s = rot(s); return s; }
+function playerSpawn(){
+  const pid = P.queue.shift(); if (P.queue.length < 7) P.queue.push(...bag());
+  P.cur = pid; P.holdUsed = false;
+  PG.rot = 0; PG.cells = rotState(pid, 0); PG.x = 3; PG.y = ROWS - 2; PG.dropAcc = 0; PG.lockAcc = 0;
+  if (collide(P.board, PG.cells, PG.x, PG.y)) { P.over = true; gameOver("T-AI の勝ち 🏆", "YOU が詰まりました"); }
+}
+function collide(bd, cells, px, py){
+  for (const [x, y] of cells) {
+    const bx = px + x, by = py + y;
+    if (bx < 0 || bx >= COLS || by < 0) return true;
+    if (by < ROWS && (bd.rows[by] & (1 << bx))) return true;
+  }
+  return false;
+}
+function cellsToPlace(){ if (!PG.cells || P.cur == null) return null; return PG.cells.map(([x, y]) => [PG.x + x, PG.y + y]); }
+// 現在位置から真下へ落とした接地y (せり出しがあっても正しいハードドロップ)
+function dropY(){
+  let y = PG.y;
+  while (!collide(P.board, PG.cells, PG.x, y - 1)) y--;
+  return y;
+}
+function ghostCells(){
+  if (!PG.cells || P.cur == null) return null;
+  const g = dropY();
+  return PG.cells.map(([x, y]) => [PG.x + x, g + y]);
+}
+function lockPlayer(hard){
+  if (hard) PG.y = dropY();
+  // 現在位置で固定する (高さからの再計算はしない = 潜り込みワープの防止)
+  const abs = PG.cells.map(([x, y]) => [PG.x + x, PG.y + y]);
+  for (const [bx, by] of abs) {
+    if (bx < 0 || bx >= COLS || by < 0) continue; // ありえないが防御
+    if (by >= ROWS) { P.over = true; gameOver("T-AI の勝ち 🏆", "YOU が天井を超えました"); return; }
+  }
+  const cl = P.board.commitAbsolute(abs.filter(([, by]) => by >= 0 && by < ROWS), P.cur);
+  afterClear(P, A, cl, "p"); playerSpawn();
+}
+function afterClear(self, foe, cl){
+  self.pieces++;
+  if (cl > 0) {
+    self.ren++; self.lines += cl;
+    const base = [0, 0, 1, 2, 4][cl] || 0;
+    const atk = base + (self.ren >= 2 ? 1 : 0);
+    self.atk += atk;
+    if (atk > 0) foe.pending += atk;
+  } else self.ren = -1;
+}
+// AI: 一手思考→スライド演出→確定
+// 左右どちらの盤面にも使える汎用ドライバ (S=自分, F=相手)
+function aiThinkStep(S){
+  if (S.over || !running || paused) return null;
+  const pid = S.queue.shift(); if (S.queue.length < 7) S.queue.push(...bag());
+  const best = think(S.board, pid);
+  if (!best) return { dead: true };
+  const s = S.board.simulate(best.cells);
+  return { anim: { pid, cells: best.cells, prog: 0, dy: s ? s.dy : 0 } };
+}
+function aiDoCommit(S, F, anim){
+  const cl = S.board.commit(anim.cells, anim.pid);
+  if (cl < 0) return false;
+  afterClear(S, F, cl); return true;
+}
+// 右側 (T-AI) 用のタイマー変数
+function aiStep(){
+  const r = aiThinkStep(A);
+  if (!r) return;
+  if (r.dead) { A.over = true; gameOver("YOU の勝ち 🏆", "T-AI が詰まりました"); return; }
+  aiAnim = r.anim;
+  aiTimer = 0;
+}
+function aiCommit(){
+  if (!aiDoCommit(A, P, aiAnim)) { A.over = true; gameOver("YOU の勝ち 🏆", "T-AI が天井を超えました"); return; }
+  aiAnim = null;
+}
+
+// ---------- 入力 (キーボード＋タッチ共通) ----------
+const keys = {};
+function press(code){
+  keys[code] = true;
+  if (!running || paused || P.over) { if (code === "KeyR") reset(); return; }
+  if (code === "KeyP") { togglePause(); return; }
+  if (code === "KeyR") { reset(); return; }
+  if (!PG.cells) return;
+  if (code === "ArrowLeft") { if (!collide(P.board, PG.cells, PG.x - 1, PG.y)) { PG.x--; PG.lockAcc = 0; } dasAcc = 0; }
+  if (code === "ArrowRight") { if (!collide(P.board, PG.cells, PG.x + 1, PG.y)) { PG.x++; PG.lockAcc = 0; } dasAcc = 0; }
+  if (code === "ArrowDown") { if (!collide(P.board, PG.cells, PG.x, PG.y - 1)) PG.y--; }
+  if (code === "ArrowUp" || code === "KeyX") tryRot(1);
+  if (code === "KeyZ") tryRot(-1);
+  if (code === "Space") lockPlayer(true);
+  if (code === "KeyC") doHold();
+  if (code === "KeyP") togglePause();
+  if (code === "KeyR") reset();
+}
+function release(code){ keys[code] = false; }
+window.addEventListener("keydown", (e) => {
+  if (["ArrowLeft", "ArrowRight", "ArrowDown", "Space"].includes(e.code)) e.preventDefault();
+  if (e.repeat) return;
+  press(e.code);
+});
+window.addEventListener("keyup", (e) => { release(e.code); });
+// タッチボタン (長押し対応)
+document.querySelectorAll("#touch button").forEach((b) => {
+  const code = b.dataset.k;
+  const on = (e) => { e.preventDefault(); press(code); };
+  const off = (e) => { if (e) e.preventDefault(); release(code); };
+  b.addEventListener("touchstart", on, { passive: false });
+  b.addEventListener("touchend", off, { passive: false });
+  b.addEventListener("touchcancel", off, { passive: false });
+  b.addEventListener("mousedown", on);
+  b.addEventListener("mouseup", off);
+  b.addEventListener("mouseleave", () => release(code));
+});
+// ゲーム中の画面スクロール・ピンチズーム・長押しメニューを抑止
+document.addEventListener("touchmove", (e) => {
+  if (e.target.closest && e.target.closest("#touch, canvas.board")) e.preventDefault();
+}, { passive: false });
+document.addEventListener("gesturestart", (e) => e.preventDefault());
+document.addEventListener("contextmenu", (e) => {
+  if (e.target.closest && e.target.closest("#touch, canvas.board")) e.preventDefault();
+});
+function tryRot(d){
+  const nr = (PG.rot + d + 4) % 4, cells = rotState(P.cur, nr);
+  for (const dx of [0, -1, 1, -2, 2]) {
+    if (!collide(P.board, cells, PG.x + dx, PG.y)) { PG.x += dx; PG.rot = nr; PG.cells = cells; PG.lockAcc = 0; return; }
+  }
+}
+function doHold(){
+  if (P.holdUsed || P.cur == null) return;
+  P.holdUsed = true;
+  if (P.hold < 0) { P.hold = P.cur; playerSpawn(); P.holdUsed = true; }
+  else { const t = P.hold; P.hold = P.cur; P.cur = t; PG.rot = 0; PG.cells = rotState(P.cur, 0); PG.x = 3; PG.y = ROWS - 2; PG.lockAcc = 0; }
+}
+
+// ---------- 描画 ----------
+const CS = 24;
+function drawBoard(ctx, bd, ghost, animPiece){
+  ctx.clearRect(0, 0, 240, 480); ctx.fillStyle = "#070a1a"; ctx.fillRect(0, 0, 240, 480);
+  ctx.strokeStyle = "#ffffff10";
+  for (let x = 0; x <= COLS; x++) { ctx.beginPath(); ctx.moveTo(x * CS, 0); ctx.lineTo(x * CS, 480); ctx.stroke(); }
+  for (let y = 0; y <= ROWS; y++) { ctx.beginPath(); ctx.moveTo(0, y * CS); ctx.lineTo(240, y * CS); ctx.stroke(); }
+  const put = (bx, by, c, alpha) => {
+    if (by < 0 || by >= ROWS || bx < 0 || bx >= COLS) return;
+    ctx.globalAlpha = alpha == null ? 1 : alpha; ctx.fillStyle = c;
+    const sy = (ROWS - 1 - by) * CS;
+    ctx.fillRect(bx * CS + 1, sy + 1, CS - 2, CS - 2);
+    ctx.fillStyle = "#ffffff55"; ctx.fillRect(bx * CS + 1, sy + 1, CS - 2, 4); ctx.globalAlpha = 1;
+  };
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const v = bd.color[r][c];
+    if (v) put(c, r, v === 8 ? "#5a5f7a" : COLORS[v]);
+  }
+  if (ghost) for (const [x, y] of ghost) put(x, y, "#ffffff", 0.18);
+  if (animPiece) for (const [x, y] of animPiece.cells) put(Math.round(x), Math.round(y), COLORS[animPiece.pid + 1]);
+}
+function drawPieceMini(ctx, pid, ox, oy, s){
+  ctx.fillStyle = COLORS[pid + 1];
+  for (const [x, y] of rotState(pid, 0)) ctx.fillRect(ox + x * s, oy + (1 - y) * s, s - 1, s - 1);
+}
+function drawNext(id, queue, n, cur){
+  const cv = $(id), ctx = cv.getContext("2d");
+  const H = (cur !== undefined && cur !== null) ? 60 : 240;
+  ctx.clearRect(0, 0, 96, H); ctx.fillStyle = "#070a1a"; ctx.fillRect(0, 0, 96, H);
+  if (cur !== undefined && cur !== null) { if (cur >= 0) drawPieceMini(ctx, cur, 30, 18, 11); return; }
+  queue.slice(0, n == null ? 4 : n).forEach((pid, i) => drawPieceMini(ctx, pid, 26, 14 + i * 58, 11));
+}
+function ease(t){ return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+
+// ---------- メインループ ----------
+function loop(t){
+  requestAnimationFrame(loop);
+  if (!running || paused) { render(); return; }
+  const dt = Math.min(0.05, (t - lastTick) / 1000 || 0); lastTick = t;
+  elapsed = (Date.now() - startTime) / 1000;
+  // 30秒アタック: 時間切れでライン数勝負
+  if (timeAttack && elapsed >= TIME_LIMIT && !P.over && !A.over) {
+    const win = P.lines > A.lines, draw = P.lines === A.lines;
+    gameOver(draw ? "引き分け 😐" : (win ? "YOU の勝ち 🏆" : "T-AI の勝ち 🏆"), "30秒アタック結果");
+    render(); updateHud(); return;
+  }
+  // プレイヤー重力 (ULTRA時は超高速)
+  const level = Math.min(10, (P.lines / 10) | 0);
+  const grav = ultra ? 0.05 : Math.max(0.12, 0.8 - level * 0.06);
+  const step = keys.ArrowDown ? 0.04 : grav;
+  if (PG.cells && !P.over) {
+    PG.dropAcc += dt;
+    if (PG.dropAcc >= step) {
+      PG.dropAcc = 0;
+      if (!collide(P.board, PG.cells, PG.x, PG.y - 1)) PG.y--;
+      else { PG.lockAcc += step; if (PG.lockAcc > 0.5) { PG.lockAcc = 0; lockPlayer(false); } }
+    } else if (collide(P.board, PG.cells, PG.x, PG.y - 1)) {
+      PG.lockAcc += dt; if (PG.lockAcc > 0.5) { PG.lockAcc = 0; lockPlayer(false); }
+    } else PG.lockAcc = 0;
+    if (keys.ArrowLeft || keys.ArrowRight) {
+      dasAcc += dt;
+      if (dasAcc > 0.15) { dasAcc = 0.1; const d = keys.ArrowLeft ? -1 : 1;
+        if (!collide(P.board, PG.cells, PG.x + d, PG.y)) PG.x += d; }
+    } else dasAcc = 0;
+  }
+  // おじゃま適用 (通常0.8秒ごとに1段ずつ / ULTRA時は0.2秒)
+  garbAcc += dt;
+  if (garbAcc > (ultra ? 0.2 : 0.8)) {
+    garbAcc = 0;
+    if (P.pending > 0) { P.board.addGarbage(1, rng); P.pending--; }
+    if (A.pending > 0) { A.board.addGarbage(1, rng); A.pending--; }
+  }
+  if (!P.over && P.board.rows[ROWS - 1] !== 0) { P.over = true; gameOver("T-AI の勝ち 🏆", "YOU が埋もれました"); }
+  if (!A.over && A.board.rows[ROWS - 1] !== 0) { A.over = true; gameOver("YOU の勝ち 🏆", "T-AI が埋もれました"); }
+  // AIタイマー (速度調整の核心: この間隔でのみ1手。右側)
+  aiTimer += dt;
+  if (aiAnim) { aiAnim.prog = Math.min(1, aiTimer / (effInterval() * 0.85)); if (aiAnim.prog >= 1) aiCommit(); }
+  else if (aiTimer >= effInterval()) aiStep();
+  render(); updateHud();
+}
+function drawAIAnim(ctx, bd, anim){
+  const t = ease(anim.prog);
+  const minX = Math.min(...anim.cells.map((p) => p[0]));
+  const animCells = anim.cells.map(([x, y]) => {
+    const startX = 3 + (x - minX);
+    const yy = (ROWS - 2) * (1 - t) + (anim.dy + y) * t;
+    return [startX * (1 - t) + x * t, yy];
+  });
+  drawBoard(ctx, bd, null, { pid: anim.pid, cells: animCells });
+}
+function render(){
+  drawBoard(pctx, P.board, ghostCells(), P.cur != null ? { pid: P.cur, cells: cellsToPlace() } : null);
+  if (aiAnim) drawAIAnim(actx, A.board, aiAnim);
+  else drawBoard(actx, A.board, null, null);
+  drawNext("pn", P.queue, 4); drawNext("an", A.queue, 4);
+  drawNext("ph", [], 0, P.hold);
+  drawNext("ah", [], 0, aiAnim ? aiAnim.pid : (A.queue.length ? A.queue[0] : -1));
+  // 30秒アタック: 残り時間表示
+  const rem = Math.max(0, TIME_LIMIT - elapsed);
+  const s = Math.ceil(rem);
+  $("timer").textContent = "0:" + String(s).padStart(2, "0");
+  $("timer").style.color = rem <= 5 ? "#ff5d7a" : "";
+}
+function updateHud(){
+  $("pl").textContent = P.lines; $("pa").textContent = P.atk;
+  $("pr").textContent = Math.max(0, P.ren); $("pp").textContent = P.pieces;
+  $("al").textContent = A.lines; $("aa").textContent = A.atk;
+  $("ar").textContent = Math.max(0, A.ren); $("ap").textContent = A.pieces;
+  $("pg").textContent = P.pending > 0 ? "💣おじゃま接近中 ×" + P.pending : "";
+  $("ag").textContent = A.pending > 0 ? "💣おじゃま接近中 ×" + A.pending : "";
+}
+
+// ---------- 進行 (30秒アタック専用) ----------
+const timeAttack = true;
+const TIME_LIMIT = 30;
+function gameOver(title, sub){
+  if (!running) return; running = false;
+  $("resTitle").textContent = title;
+  $("resSub").textContent = sub + " (" + P.lines + " vs " + A.lines + " LINES)";
+  $("overlay").style.display = "flex"; $("status").textContent = "終了";
+  $("pauseBtn").disabled = true;
+  // 自分がプレイした記録を登録可
+  lastResult = P.pieces > 0
+    ? { lines: P.lines, won: A.over || (!P.over && P.lines > A.lines), mode: "timeattack" }
+    : null;
+  $("rankForm").style.display = lastResult ? "flex" : "none";
+  const saved = loadLocalName() || $("nick").value;
+  if (saved) { $("rankName").value = saved; $("nick").value = saved; }
+}
+
+// ---------- ランキング (D1 + ローカルフォールバック) ----------
+let lastResult = null;
+const LS_KEY = "tai_rank_local";
+const LS_NAME = "tai_player_name";
+function loadLocalName(){ try { return localStorage.getItem(LS_NAME) || ""; } catch { return ""; } }
+function esc(s){ return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+async function loadRanking(){
+  const tb = $("rankBody");
+  try {
+    const r = await fetch("api/rank?limit=10");
+    if (!r.ok) throw new Error("api " + r.status);
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || "api error");
+    if (!j.ranking.length) { tb.innerHTML = '<tr><td colspan="5">まだ記録がありません。最初の挑戦者に！</td></tr>'; return; }
+    tb.innerHTML = j.ranking.map((s, i) =>
+      `<tr><td>${i + 1}</td><td>${esc(s.name)}</td><td>${s.lines}</td>` +
+      `<td>${s.won ? "🏆勝利" : "敗北"}</td>` +
+      `<td>${esc((s.created_at || "").slice(0, 16).replace("T", " "))}</td></tr>`
+    ).join("");
+    $("rankMsg").textContent = "";
+  } catch (e) {
+    // APIなし(file直開き等)はローカル記録を表示
+    let local = [];
+    try { local = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch {}
+    if (!local.length) { tb.innerHTML = '<tr><td colspan="5">記録なし（オンライン時に自動取得します）</td></tr>'; return; }
+    local.sort((a, b) => b.lines - a.lines);
+    tb.innerHTML = local.slice(0, 10).map((s, i) =>
+      `<tr><td>${i + 1}</td><td>${esc(s.name)}</td><td>${s.lines}</td>` +
+      `<td>${s.won ? "🏆勝利" : "敗北"}</td><td>-</td></tr>`
+    ).join("");
+    $("rankMsg").textContent = "※オフライン表示（この端末の記録）";
+  }
+}
+async function submitRanking(){
+  const name = $("rankName").value.trim();
+  if (!name) { $("rankMsg").textContent = "名前を入力してください"; return; }
+  if (!lastResult) return;
+  $("rankSubmit").disabled = true;
+  const payload = { name: name.slice(0, 12), lines: lastResult.lines, won: lastResult.won, mode: lastResult.mode };
+  try { localStorage.setItem(LS_NAME, payload.name); } catch (e2) {}
+  try {
+    const r = await fetch("api/rank", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || "登録失敗");
+    $("rankMsg").textContent = `登録完了！ あなたは第${j.rank}位です🎉`;
+    lastResult = null;
+    $("rankForm").style.display = "none";
+  } catch (e) {
+    // フォールバック: ローカル保存
+    try {
+      const local = JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+      local.push({ ...payload, created_at: new Date().toISOString() });
+      localStorage.setItem(LS_KEY, JSON.stringify(local.slice(-50)));
+      $("rankMsg").textContent = "オンライン登録できませんでした。この端末に保存しました";
+    } catch { $("rankMsg").textContent = "登録できませんでした: " + e.message; }
+    lastResult = null;
+    $("rankForm").style.display = "none";
+  } finally {
+    $("rankSubmit").disabled = false;
+    loadRanking();
+  }
+}
+$("rankSubmit").onclick = submitRanking;
+$("rankReload").onclick = loadRanking;
+loadRanking();
+function reset(){
+  P = mkSide(); A = mkSide(); aiAnim = null; aiTimer = 0;
+  elapsed = 0; dasAcc = 0; garbAcc = 0;
+  PG.cells = null; P.cur = null;
+  $("overlay").style.display = "none"; $("status").textContent = "待機中";
+  $("pauseBtn").disabled = true; $("pauseBtn").textContent = "一時停止"; $("startBtn").disabled = false;
+  render(); updateHud();
+}
+$("startBtn").onclick = () => {
+  reset();
+  const c = $("count"); let n = 3;
+  $("startBtn").disabled = true;
+  c.style.display = "flex";
+  $("status").textContent = "まもなく開始…";
+  const iv = setInterval(() => {
+    c.textContent = n > 0 ? n : "GO!";
+    if (n < 0) {
+      clearInterval(iv); c.style.display = "none";
+      running = true; paused = false; startTime = Date.now(); lastTick = performance.now();
+      playerSpawn(); aiTimer = effInterval();
+      $("status").textContent = "⏱️30秒アタック！";
+      $("pauseBtn").disabled = false;
+    }
+    n--;
+  }, 700);
+};
+function togglePause(){
+  if (!running) return; paused = !paused;
+  $("pauseBtn").textContent = paused ? "再開" : "一時停止";
+  $("status").textContent = paused ? "一時停止中" : "⏱️30秒アタック！";
+  lastTick = performance.now();
+}
+try {
+  const savedNick = localStorage.getItem(LS_NAME) || "";
+  if (savedNick) $("nick").value = savedNick;
+} catch (e) {}
+$("nick").oninput = (e) => { try { localStorage.setItem(LS_NAME, e.target.value.slice(0, 12)); } catch (e2) {} };
+$("pauseBtn").onclick = togglePause;
+$("resetBtn").onclick = reset;
+$("spd").oninput = (e) => {
+  aiInterval = parseFloat(e.target.value);
+  updateSpdLabel();
+};
+$("ultraSpd").oninput = (e) => {
+  ultraIv = parseFloat(e.target.value);
+  updateSpdLabel();
+};
+document.querySelectorAll("[data-spd]").forEach((b) => { b.onclick = () => { $("spd").value = b.dataset.spd; $("spd").dispatchEvent(new Event("input")); }; });
+$("ultraBtn").onclick = () => {
+  ultra = !ultra;
+  const b = $("ultraBtn");
+  b.textContent = ultra ? "⚡ ULTRA中… (押して解除)" : "⚡ ULTRA MODE ⚡";
+  b.style.background = ultra ? "linear-gradient(135deg,#ff3d5a,#ff9100)" : "";
+  b.style.border = ultra ? "none" : "";
+  $("center").style.boxShadow = ultra ? "0 0 28px #ff3d5a99" : "";
+  $("status").textContent = ultra ? "⚡ ULTRA MODE ⚡" : (running && !paused ? "⏱️30秒アタック！" : $("status").textContent);
+  updateSpdLabel();
+};
+
+render(); updateHud(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "generation": 100,
+  "fitness": 479487.75,
+  "lines_30s": 479,
+  "max_ren": 10,
+  "mean_ren": 0.5258333333333334,
+  "survived_seconds": 30.0,
+  "weights": {
+    "aggregate_height": -1.1778708696365356,
+    "max_height": -0.06713330000638962,
+    "holes": -1.2898045778274536,
+    "bumpiness": -0.1808600276708603,
+    "wells": -0.23975726962089539,
+    "cleared_lines": 0.6455249786376953
+  }
+}

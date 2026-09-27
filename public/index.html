@@ -747,6 +747,10 @@ let lastResult = null;
 const LS_KEY = "tai_rank_local";
 const LS_NAME = "tai_player_name";
 const LS_CLOUD = "tai_rank_cloud";
+// GitHub Pages等の静的ホストでは世界記録の取得のみCloudflareを参照 (書込なし)
+const RANK_API = location.hostname.endsWith("pages.dev") || location.hostname.endsWith("workers.dev")
+  ? "api/rank"
+  : "https://tetris-vs-ai.pages.dev/api/rank";
 let cloudSnapshot = [];
 function loadLocalName(){ try { return localStorage.getItem(LS_NAME) || ""; } catch { return ""; } }
 function esc(s){ return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
@@ -767,7 +771,7 @@ function renderRanking(){
 async function loadRanking(){
   // クラウド参照はこの初回読み込み時のみ。以降の記録は端末内。
   try {
-    const r = await fetch("api/rank?limit=20");
+    const r = await fetch(RANK_API + "?limit=20");
     if (!r.ok) throw new Error("api " + r.status);
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || "api error");

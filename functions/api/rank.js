@@ -4,8 +4,23 @@
 const json = (data, status = 200) =>
   Response.json(data, {
     status,
-    headers: { "Cache-Control": "no-store" },
+    headers: {
+      "Cache-Control": "no-store",
+      // GitHub Pages等の別オリジンからの初回読込を許可 (読取のみ・書込APIは無効化済み)
+      "Access-Control-Allow-Origin": "*",
+    },
   });
+
+export async function onRequestOptions() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Max-Age": "86400",
+    },
+  });
+}
 
 export async function onRequestGet(context) {
   const url = new URL(context.request.url);
